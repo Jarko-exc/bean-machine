@@ -1,10 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 
-// === KONFIGURACE ===
-const STATUS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS70W8M4EY7hX06go1OZZKDC_YQo1DB6W_iyxlxyV-JCojRrlozGecPLWlrdz5wPu6cvGrLAeneEgJW/pub?output=csv"; 
-const DISCORD_WEBHOOK_URL = "TVŮJ_DISCORD_WEBHOOK"; // <--- TADY VLOŽ SVŮJ WEBHOOK
-
+// === MENU POLOŽKY ===
 const MENU_ITEMS = [
   { id: 1, name: "Matcha Cafe", desc: "Energie z dálného východu.", price: 1000, icon: "☕" },
   { id: 2, name: "Mine-Ice Pop", desc: "Maximální hydratace.", price: 1000, icon: "☕" },
@@ -23,31 +20,29 @@ export default function BeanMachinePortal() {
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
   const [lastOrderCode, setLastOrderCode] = useState<string | null>(null);
 
- useEffect(() => {
-  const fetchStatus = async () => {
-  try {
-    // Teď se ptáme našeho vlastního serveru, ne Googlu přímo
-    const response = await fetch('/api/status'); 
+  // NAČTENÍ STAVU OTEVŘENO/ZAVŘENO (JEN PŘI STARTU)
+  useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const response = await fetch('/api/status'); 
+        if (!response.ok) throw new Error("Chyba serveru");
+        
+        const data = await response.json();
+        const stringifiedData = JSON.stringify(data).toUpperCase();
 
-    if (!response.ok) throw new Error("Chyba serveru");
-    
-    const data = await response.json();
-    const stringifiedData = JSON.stringify(data).toUpperCase();
-
-    if (stringifiedData.includes("OTEVŘENO")) {
-      setIsOpen(true);
-    } else {
-      setIsOpen(false);
-    }
-  } catch (e) {
-    console.error("Chyba:", e);
-    setIsOpen(false);
-  }
-};
+        if (stringifiedData.includes("OTEVŘENO")) {
+          setIsOpen(true);
+        } else {
+          setIsOpen(false);
+        }
+      } catch (e) {
+        console.error("Chyba při načítání statusu:", e);
+        setIsOpen(false);
+      }
+    };
 
     fetchStatus();
-    // ODEBRALI JSME setInterval - teď se to spustí jen jednou při načtení
-  }, []); // Prázdné závorky zajistí, že se to spustí jen 1x
+  }, []);
 
   const addToCart = (item: typeof MENU_ITEMS[0]) => {
     setCart(prev => ({
@@ -82,70 +77,66 @@ export default function BeanMachinePortal() {
 
   const total = Object.entries(cart).reduce((acc, [_, item]) => acc + (item.price * item.count), 0);
 
+  // ODESLÁNÍ OBJEDNÁVKY PŘES API MOST
   const potvrditObjednavku = async () => {
     const code = `BM-${Math.floor(1000 + Math.random() * 9000)}`;
-    
-    // POUŽÍVÁME | MÍSTO ČÁRKY, ABY SE NEROZBILO CSV V TABULCE
     const itemsForTable = Object.entries(cart).map(([_, item]) => `${item.name} (${item.count}x)`).join(" | ");
-    const itemsForDiscord = Object.entries(cart).map(([_, item]) => `${item.name} (${item.count}x)`).join("\n");
-
-    // ZÁPIS DO TABULKY
-    fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      body: JSON.stringify({ code, customer: customerName, items: itemsForTable, price: total })
-    });
-
-    // DISCORD
-    const payload = {
-      username: "Bean Machine",
-      embeds: [{
-        title: `Nová objednávka: ${code}`,
-        color: 14251782,
-        fields: [
-          { name: "Zákazník", value: customerName, inline: true },
-          { name: "Cena", value: `$${total}`, inline: true },
-          { name: "Položky", value: itemsForDiscord }
-        ]
-      }]
-    };
 
     try {
-      await fetch(DISCORD_WEBHOOK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      setLastOrderCode(code);
-      setCart({});
-      setCustomerName("");
-      alert(`Objednávka odeslána! Tvůj kód pro sledování: ${code}`);
-      setView('home');
-    } catch (e) { alert("Chyba spojení s Discordem."); }
+      const response = await fetch('/api/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          code, 
+          customer: customerName, 
+          items: itemsForTable, 
+          price: total 
+        })
+      });
+
+      if (response.ok) {
+        setLastOrderCode(code);
+        setCart({});
+        setCustomerName("");
+        alert(`Objednávka odeslána! Tvůj kód: ${code}`);
+        setView('home');
+      } else {
+        alert("Chyba při odesílání na server.");
+      }
+    } catch (e) {
+      alert("Chyba spojení se serverem.");
+    }
   };
 
+  // SLEDOVÁNÍ STAVU OBJEDNÁVKY
   const zkontrolovatStav = async () => {
     if (!searchCode) return;
     setOrderStatus("Vyhledávání...");
     try {
-      const response = await fetch(`${STATUS_SHEET_URL}&t=${Date.now()}`);
-      const text = await response.text();
+      const response = await fetch('/api/status'); // Používáme náš most, aby nebyl CORS error
+      const data = await response.json();
       
-      const rows = text.split(/\r?\n/);
-      const row = rows.find(r => r.toUpperCase().includes(searchCode.toUpperCase()));
+      const cleanSearch = searchCode.trim().toUpperCase();
+      // Prohledáme řádky v tabulce
+      const foundRow = data.find((row: any) => 
+        row.some((cell: any) => cell?.toString().toUpperCase() === cleanSearch)
+      );
       
-      if (row) {
-        const parts = row.split(',');
-        // VŽDY BEREME POSLEDNÍ SLOUPEC (INDEX LENGTH - 1)
-        const statusValue = parts[parts.length - 1].replace(/"/g, '').trim();
-        setOrderStatus(statusValue || "Zpracovává se");
+      if (foundRow) {
+        // Předpokládáme, že status je v posledním sloupci
+        setOrderStatus(foundRow[foundRow.length - 1] || "Zpracovává se");
       } else { 
         setOrderStatus("Kód nenalezen"); 
       }
-    } catch (e) { setOrderStatus("Chyba spojení"); }
+    } catch (e) { 
+      setOrderStatus("Chyba spojení"); 
+    }
   };
 
   return (
     <div className="relative min-h-screen text-[#fdf8eb] font-sans overflow-x-hidden">
       <style>{`input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}input[type=number]{-moz-appearance:textfield}`}</style>
       
-      {/* POZADÍ */}
       <div className="fixed inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: `url('/pozadi.png')` }}>
         <div className="absolute inset-0 bg-black/75 backdrop-blur-[2px]"></div>
       </div>
@@ -157,11 +148,10 @@ export default function BeanMachinePortal() {
             <div className="h-2 w-32 bg-[#d97706] mt-1"></div>
           </div>
           <div className={`px-6 py-2 rounded-full border-2 ${isOpen ? 'border-green-500 text-green-500' : 'border-red-500 text-red-500'} bg-black/50 text-xs font-black uppercase tracking-widest`}>
-            {isOpen ? 'Otevřeno' : 'Zavřeno'}
+            {isOpen === null ? 'Načítání...' : (isOpen ? 'Otevřeno' : 'Zavřeno')}
           </div>
         </header>
 
-        {/* ROZCESTÍ */}
         {view === 'home' && (
           <div className="flex flex-col items-center py-20 animate-in fade-in zoom-in duration-500">
             <h2 className="text-7xl font-black mb-16 uppercase text-white tracking-tighter drop-shadow-2xl">Vítejte</h2>
@@ -179,7 +169,6 @@ export default function BeanMachinePortal() {
           </div>
         )}
 
-        {/* SLEDOVÁNÍ */}
         {view === 'status' && (
           <div className="max-w-2xl mx-auto py-10 animate-in fade-in slide-in-from-bottom-4">
             <button onClick={() => setView('home')} className="mb-6 text-[#d97706] font-bold uppercase tracking-widest hover:text-white transition-colors">← Zpět na úvod</button>
@@ -202,7 +191,6 @@ export default function BeanMachinePortal() {
           </div>
         )}
 
-        {/* MENU */}
         {view === 'order' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 animate-in fade-in duration-500">
             <div className="lg:col-span-7">
@@ -219,7 +207,6 @@ export default function BeanMachinePortal() {
                </div>
             </div>
 
-            {/* KOŠÍK */}
             <div className="lg:col-span-5">
               <div className="bg-[#23110a] p-10 rounded-[4rem] border border-white/5 sticky top-10 shadow-2xl">
                 <h2 className="text-3xl font-black mb-8 border-b border-white/10 pb-4 uppercase text-white tracking-tighter">Vaše objednávka</h2>
@@ -252,7 +239,7 @@ export default function BeanMachinePortal() {
                   <input 
                     value={customerName} 
                     onChange={e => setCustomerName(e.target.value)} 
-                    placeholder="JMÉNO ZÁKAZNÍKA (MATEO REYES)" 
+                    placeholder="JMÉNO ZÁKAZNÍKA" 
                     className="w-full bg-black/40 border-2 border-white/5 p-6 rounded-[1.5rem] font-black text-white outline-none focus:border-[#d97706] uppercase transition-all placeholder:text-white/10" 
                   />
                   <button 
