@@ -1,10 +1,10 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 
-// === KONFIGURACE ===
+// === KONFIGURACE (Vlož své linky) ===
 const STATUS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS70W8M4EY7hX06go1OZZKDC_YQo1DB6W_iyxlxyV-JCojRrlozGecPLWlrdz5wPu6cvGrLAeneEgJW/pub?output=csv"; 
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxz4X7fpgMrrQfrxE5kGsP3Yy-taMcFjAFHXsGzO0w701G8G-rX_8ZJ8q2tpx-ByP2y/exec";
-const DISCORD_WEBHOOK_URL = "SEM_VLOZ_TVUJ_DISCORD_WEBHOOK"; // <--- DOPLŇ SI
+const DISCORD_WEBHOOK_URL = "SEM_VLOZ_TVUJ_DISCORD_WEBHOOK"; 
 
 const MENU_ITEMS = [
   { id: 1, name: "Matcha Cafe", desc: "Energie z dálného východu.", price: 1000, icon: "☕" },
@@ -23,14 +23,25 @@ export default function BeanMachinePortal() {
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [searchCode, setSearchCode] = useState("");
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
+  const [lastCheckTime, setLastCheckTime] = useState<number>(0); // State pro 5s delay
 
-  // Funkce pro zjištění stavu podniku
+  // Funkce pro zjištění stavu podniku s 5s delayem
   const checkStatus = async () => {
+    const nyni = Date.now();
+    
+    // Kontrola 5 sekund
+    if (nyni - lastCheckTime < 5000) {
+      const zbyva = Math.ceil((5000 - (nyni - lastCheckTime)) / 1000);
+      alert(`Počkej ještě ${zbyva} s, než to zkusíš znovu.`);
+      return;
+    }
+
     setLoadingStatus(true);
     try {
-      const response = await fetch(`${STATUS_SHEET_URL}&t=${Date.now()}`);
+      const response = await fetch(`${STATUS_SHEET_URL}&t=${nyni}`);
       const text = await response.text();
       setIsOpen(text.toUpperCase().includes("OTEVŘENO"));
+      setLastCheckTime(nyni); // Uložíme čas úspěšného kliknutí
     } catch (e) {
       setIsOpen(false);
     } finally {
@@ -39,7 +50,7 @@ export default function BeanMachinePortal() {
   };
 
   // Správa košíku
-  const addToCart = (item: typeof MENU_ITEMS[0]) => {
+  const addToCart = (item: {id: number, name: string, price: number}) => {
     setCart(prev => ({
       ...prev,
       [item.id]: { name: item.name, price: item.price, count: (prev[item.id]?.count || 0) + 1 }
@@ -90,7 +101,7 @@ export default function BeanMachinePortal() {
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({
-          content: `☕ **Nová objednávka!**\n**Kód:** ${code}\n**Zákazník:** ${customerName}\n**Cena:** ${total} B\n**Položky:** ${itemsList}`
+          content: `☕ **Nová objednávka!**\n**Kód:** ${code}\n**Zákazník:** ${customerName}\n**Cena:** ${total} $\n**Položky:** ${itemsList}`
         }) 
       });
       alert(`Objednávka odeslána! Tvůj kód: ${code}`);
@@ -115,7 +126,6 @@ export default function BeanMachinePortal() {
             <div className="h-2 w-32 bg-[#d97706] mt-1"></div>
           </div>
 
-          {/* TLAČÍTKO STATUSU PODNIKU */}
           <button 
             onClick={checkStatus}
             disabled={loadingStatus}
@@ -178,7 +188,7 @@ export default function BeanMachinePortal() {
                         onChange={(e) => updateCount(Number(id), parseInt(e.target.value) || 0)}
                         className="w-12 bg-transparent text-center font-black text-white border-b border-[#d97706] outline-none"
                       />
-                      <button onClick={() => addToCart({id: Number(id), name: item.name, price: item.price, icon: "", desc: ""})} className="w-8 h-8 bg-green-500/20 text-green-500 rounded-lg font-bold hover:bg-green-500 hover:text-white transition-all">+</button>
+                      <button onClick={() => addToCart({id: Number(id), name: item.name, price: item.price})} className="w-8 h-8 bg-green-500/20 text-green-500 rounded-lg font-bold hover:bg-green-500 hover:text-white transition-all">+</button>
                     </div>
                   </div>
                 ))}
@@ -186,7 +196,7 @@ export default function BeanMachinePortal() {
                 <div className="border-t-4 border-[#d97706] pt-6 mt-6">
                   <div className="flex justify-between items-end mb-6">
                     <span className="text-gray-400 font-bold uppercase text-xs tracking-widest">Celkem k úhradě</span>
-                    <p className="text-5xl font-black text-[#d97706] leading-none">{total} $</p>
+                    <p className="text-5xl font-black text-[#d97706] leading-none">$ {total}</p>
                   </div>
                   <input 
                     value={customerName} 
@@ -207,7 +217,6 @@ export default function BeanMachinePortal() {
           </div>
         )}
 
-        {/* ... Sekce Status zůstává jako dřív ... */}
         {view === 'status' && (
           <div className="max-w-2xl mx-auto py-10">
             <button onClick={() => setView('home')} className="mb-6 text-[#d97706] font-bold uppercase tracking-widest">← Zpět</button>
