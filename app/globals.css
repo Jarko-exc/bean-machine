@@ -1,26 +1,35 @@
 @import "tailwindcss";
 
+/* Vynulujeme defaultní barvy Next.js, aby nám nekazily tvůj design */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: transparent;
+  --foreground: #fdf8eb; /* Tvoje světlá barva textu */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* Nastavení pro celé tělo webu */
 body {
-  background: var(--background);
+  background-color: #0a0a0a; /* Základní černá, než se načte obrázek */
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Tady si můžeš přidat vlastní styly pro posuvník (scrollbar), aby ladil k webu */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a0f0a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d97706;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #b45309;
 }
