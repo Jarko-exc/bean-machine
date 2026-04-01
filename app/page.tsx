@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 
 // === KONFIGURACE ===
 const STATUS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS70W8M4EY7hX06go1OZZKDC_YQo1DB6W_iyxlxyV-JCojRrlozGecPLWlrdz5wPu6cvGrLAeneEgJW/pub?output=csv"; 
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxz4X7fpgMrrQfrxE5kGsP3Yy-taMcFjAFHXsGzO0w701G8G-rX_8ZJ8q2tpx-ByP2y/exec"; 
 const DISCORD_WEBHOOK_URL = "TVŮJ_DISCORD_WEBHOOK"; // <--- TADY VLOŽ SVŮJ WEBHOOK
 
 const MENU_ITEMS = [
