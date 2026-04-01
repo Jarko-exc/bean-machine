@@ -186,7 +186,7 @@ export default function BeanMachinePortal() {
                 <div className="border-t-4 border-[#d97706] pt-6 mt-6">
                   <div className="flex justify-between items-end mb-6">
                     <span className="text-gray-400 font-bold uppercase text-xs tracking-widest">Celkem k úhradě</span>
-                    <p className="text-5xl font-black text-[#d97706] leading-none">{total} B</p>
+                    <p className="text-5xl font-black text-[#d97706] leading-none">{total} $</p>
                   </div>
                   <input 
                     value={customerName} 

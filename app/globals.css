@@ -33,3 +33,11 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #b45309;
 }
+
+/* Schová šipky u číselného vstupu pro Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
