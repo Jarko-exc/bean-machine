@@ -25,30 +25,26 @@ export default function BeanMachinePortal() {
   const [lastOrderCode, setLastOrderCode] = useState<string | null>(null);
 
  useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        // Načteme data z Google Scriptu s "cache busterem", aby to nebylo staré
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?t=${Date.now()}`);
-        if (!response.ok) throw new Error("Chyba sítě");
-        
-        const data = await response.json();
-        
-        // Předpokládáme, že OTEVŘENO/ZAVŘENO je v buňce A1 (data[0][0])
-        const statusRaw = data[0][0] ? data[0][0].toString().toUpperCase() : "";
+  const fetchStatus = async () => {
+  try {
+    // Teď se ptáme našeho vlastního serveru, ne Googlu přímo
+    const response = await fetch('/api/status'); 
 
-        if (statusRaw.includes("OTEVŘENO")) {
-          setIsOpen(true);
-        } else if (statusRaw.includes("ZAVŘENO")) {
-          setIsOpen(false);
-        } else {
-          // Pokud v buňce nic není, výchozí stav bude Zavřeno (nebo co chceš)
-          setIsOpen(false);
-        }
-      } catch (e) {
-        console.error("Nepodařilo se načíst stav při startu:", e);
-        setIsOpen(false); 
-      }
-    };
+    if (!response.ok) throw new Error("Chyba serveru");
+    
+    const data = await response.json();
+    const stringifiedData = JSON.stringify(data).toUpperCase();
+
+    if (stringifiedData.includes("OTEVŘENO")) {
+      setIsOpen(true);
+    } else {
+      setIsOpen(false);
+    }
+  } catch (e) {
+    console.error("Chyba:", e);
+    setIsOpen(false);
+  }
+};
 
     fetchStatus();
     // ODEBRALI JSME setInterval - teď se to spustí jen jednou při načtení
