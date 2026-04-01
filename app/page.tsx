@@ -23,29 +23,50 @@ export default function BeanMachinePortal() {
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [searchCode, setSearchCode] = useState("");
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
-  const [lastCheckTime, setLastCheckTime] = useState<number>(0); // State pro 5s delay
+  const [lastOrderCode, setLastOrderCode] = useState<string | null>(null);
+  const [lastSearchTime, setLastSearchTime] = useState<number>(0); // Delay pro sledování (10s)
 
-  // Funkce pro zjištění stavu podniku s 5s delayem
+  // 1. STATUS PODNIKU (bez omezení)
   const checkStatus = async () => {
-    const nyni = Date.now();
-    
-    // Kontrola 5 sekund
-    if (nyni - lastCheckTime < 5000) {
-      const zbyva = Math.ceil((5000 - (nyni - lastCheckTime)) / 1000);
-      alert(`Počkej ještě ${zbyva} s, než to zkusíš znovu.`);
-      return;
-    }
-
     setLoadingStatus(true);
     try {
-      const response = await fetch(`${STATUS_SHEET_URL}&t=${nyni}`);
+      const response = await fetch(`${STATUS_SHEET_URL}&t=${Date.now()}`);
       const text = await response.text();
       setIsOpen(text.toUpperCase().includes("OTEVŘENO"));
-      setLastCheckTime(nyni); // Uložíme čas úspěšného kliknutí
     } catch (e) {
       setIsOpen(false);
     } finally {
       setLoadingStatus(false);
+    }
+  };
+
+  // 2. SLEDOVÁNÍ OBJEDNÁVKY (delay 10s)
+  const zkontrolovatStavObjednavky = async () => {
+    const nyni = Date.now();
+    if (nyni - lastSearchTime < 10000) {
+      const zbyva = Math.ceil((10000 - (nyni - lastSearchTime)) / 1000);
+      alert(`Status se z tabulky propisuje pomalu. Zkus to znovu za ${zbyva} s.`);
+      return;
+    }
+
+    if (!searchCode) return;
+    setOrderStatus("Vyhledávání...");
+    
+    try {
+      const response = await fetch(`${STATUS_SHEET_URL}&t=${nyni}`);
+      const text = await response.text();
+      const rows = text.split(/\r?\n/);
+      const row = rows.find(r => r.toUpperCase().includes(searchCode.toUpperCase()));
+      
+      if (row) {
+        const parts = row.split(',');
+        setOrderStatus(parts[parts.length - 1].replace(/"/g, '').trim() || "Zpracovává se");
+        setLastSearchTime(nyni);
+      } else {
+        setOrderStatus("Kód nenalezen");
+      }
+    } catch (e) {
+      setOrderStatus("Chyba spojení");
     }
   };
 
@@ -104,6 +125,7 @@ export default function BeanMachinePortal() {
           content: `☕ **Nová objednávka!**\n**Kód:** ${code}\n**Zákazník:** ${customerName}\n**Cena:** ${total} $\n**Položky:** ${itemsList}`
         }) 
       });
+      setLastOrderCode(code); // Uloží kód pro hlavní obrazovku
       alert(`Objednávka odeslána! Tvůj kód: ${code}`);
       setCart({});
       setCustomerName("");
@@ -140,9 +162,19 @@ export default function BeanMachinePortal() {
         </header>
 
         {view === 'home' && (
-          <div className="flex flex-col items-center py-20">
-            <h2 className="text-7xl font-black mb-16 uppercase text-white tracking-tighter">Vítejte</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 w-full max-w-4xl">
+          <div className="flex flex-col items-center py-20 text-center">
+            <h2 className="text-7xl font-black mb-4 uppercase text-white tracking-tighter">Vítejte</h2>
+            
+            {/* Zobrazení posledního kódu */}
+            {lastOrderCode && (
+              <div className="mb-12 bg-white/5 border border-[#d97706] px-6 py-2 rounded-full animate-pulse">
+                <p className="text-[#d97706] font-black uppercase text-sm tracking-widest">
+                  Tvůj poslední kód: <span className="text-white text-lg ml-2">{lastOrderCode}</span>
+                </p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 w-full max-w-4xl mt-6">
               <div onClick={() => setView('order')} className="bg-[#23110a] border-4 border-white/5 p-12 rounded-[4rem] text-center cursor-pointer hover:border-[#d97706] transition-all">
                 <div className="text-7xl mb-4">☕</div>
                 <h3 className="text-3xl font-black uppercase">Objednat</h3>
@@ -176,7 +208,7 @@ export default function BeanMachinePortal() {
                 <h2 className="text-3xl font-black mb-8 border-b border-white/10 pb-4 uppercase">Váš Košík</h2>
                 {Object.entries(cart).map(([id, item]) => (
                   <div key={id} className="flex justify-between items-center mb-6 bg-black/20 p-4 rounded-2xl">
-                    <div className="flex flex-col">
+                    <div className="flex flex-col text-left">
                       <span className="font-bold text-white uppercase text-sm">{item.name}</span>
                       <span className="text-[#d97706] font-black">${item.price * item.count}</span>
                     </div>
@@ -195,7 +227,7 @@ export default function BeanMachinePortal() {
                 
                 <div className="border-t-4 border-[#d97706] pt-6 mt-6">
                   <div className="flex justify-between items-end mb-6">
-                    <span className="text-gray-400 font-bold uppercase text-xs tracking-widest">Celkem k úhradě</span>
+                    <span className="text-gray-400 font-bold uppercase text-xs tracking-widest text-left">Celkem k úhradě</span>
                     <p className="text-5xl font-black text-[#d97706] leading-none">$ {total}</p>
                   </div>
                   <input 
@@ -228,19 +260,7 @@ export default function BeanMachinePortal() {
                 placeholder="BM-XXXX" 
                 className="w-full bg-black/40 border-2 border-white/10 rounded-2xl p-6 text-2xl font-black outline-none text-[#d97706] text-center mb-6"
               />
-              <button onClick={async () => {
-                 setOrderStatus("Vyhledávání...");
-                 try {
-                   const response = await fetch(`${STATUS_SHEET_URL}&t=${Date.now()}`);
-                   const text = await response.text();
-                   const rows = text.split(/\r?\n/);
-                   const row = rows.find(r => r.toUpperCase().includes(searchCode.toUpperCase()));
-                   if (row) {
-                     const parts = row.split(',');
-                     setOrderStatus(parts[parts.length - 1].replace(/"/g, '').trim() || "Zpracovává se");
-                   } else { setOrderStatus("Kód nenalezen"); }
-                 } catch (e) { setOrderStatus("Chyba spojení"); }
-              }} className="w-full py-6 rounded-2xl bg-[#d97706] text-[#23110a] font-black uppercase">Najít Objednávku</button>
+              <button onClick={zkontrolovatStavObjednavky} className="w-full py-6 rounded-2xl bg-[#d97706] text-[#23110a] font-black uppercase">Najít Objednávku</button>
               {orderStatus && <p className="mt-8 text-4xl font-black uppercase text-white animate-pulse">{orderStatus}</p>}
             </div>
           </div>
