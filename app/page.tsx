@@ -24,18 +24,35 @@ export default function BeanMachinePortal() {
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
   const [lastOrderCode, setLastOrderCode] = useState<string | null>(null);
 
-  useEffect(() => {
+ useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const response = await fetch(`${STATUS_SHEET_URL}&t=${Date.now()}`);
-        const text = await response.text();
-        setIsOpen(text.replace(/"/g, '').trim().toUpperCase().includes("OTEVŘENO"));
-      } catch (e) { setIsOpen(false); }
+        // Načteme data z Google Scriptu s "cache busterem", aby to nebylo staré
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?t=${Date.now()}`);
+        if (!response.ok) throw new Error("Chyba sítě");
+        
+        const data = await response.json();
+        
+        // Předpokládáme, že OTEVŘENO/ZAVŘENO je v buňce A1 (data[0][0])
+        const statusRaw = data[0][0] ? data[0][0].toString().toUpperCase() : "";
+
+        if (statusRaw.includes("OTEVŘENO")) {
+          setIsOpen(true);
+        } else if (statusRaw.includes("ZAVŘENO")) {
+          setIsOpen(false);
+        } else {
+          // Pokud v buňce nic není, výchozí stav bude Zavřeno (nebo co chceš)
+          setIsOpen(false);
+        }
+      } catch (e) {
+        console.error("Nepodařilo se načíst stav při startu:", e);
+        setIsOpen(false); 
+      }
     };
+
     fetchStatus();
-    const interval = setInterval(fetchStatus, 15000);
-    return () => clearInterval(interval);
-  }, []);
+    // ODEBRALI JSME setInterval - teď se to spustí jen jednou při načtení
+  }, []); // Prázdné závorky zajistí, že se to spustí jen 1x
 
   const addToCart = (item: typeof MENU_ITEMS[0]) => {
     setCart(prev => ({
